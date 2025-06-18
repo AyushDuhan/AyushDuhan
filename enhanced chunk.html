@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Graph Editor</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-bg: #2a2a2a;
+            --text-color: #e0e0e0;
+            --primary-color: #4a90e2;
+            --border-color: #444;
+            --input-bg: #333;
+            --button-hover: #5a9ee2;
+            --danger-color: #e24a4a;
+            --highlight-color: #FFAA1D; /* Gold */
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls-panel {
+            width: 280px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
+            z-index: 10;
+        }
+
+        .canvas-container {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #graphCanvas {
+            display: block;
+            background-color: var(--bg-color);
+            cursor: grab;
+        }
+        
+        #graphCanvas:active {
+            cursor: grabbing;
+        }
+
+        h2, h3 {
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-top: 0;
+        }
+
+        textarea, input[type="text"], input[type="number"] {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 8px;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            height: 250px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+            order: 5; 
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .color-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .color-swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: transform 0.1s, border-color 0.2s;
+        }
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+        .color-swatch.selected {
+            border-color: var(--highlight-color);
+        }
+        
+        .color-setting {
+            margin-bottom: 15px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: background-color 0.2s;
+            margin-bottom: 8px;
+        }
+
+        button:hover {
+            background-color: var(--button-hover);
+        }
+        
+        button.secondary {
+            background-color: #555;
+        }
+        button.secondary:hover {
+            background-color: #666;
+        }
+        
+        .file-ops button {
+            display: inline-block;
+            width: calc(50% - 4px);
+        }
+        
+        #graph-data-group { order: 1; }
+        #search-nav-group { order: 2; }
+        #global-settings-group { order: 3; }
+        #file-ops-group { order: 10; }
+
+
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(42, 42, 42, 0.9);
+            color: #ccc;
+            padding: 5px 15px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        
+        .status-bar span {
+            margin-right: 20px;
+        }
+
+        .context-menu {
+            position: absolute;
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 8px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            display: none;
+            min-width: 180px;
+        }
+
+        .context-menu ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .context-menu ul li {
+            padding: 10px 20px;
+            cursor: pointer;
+            color: var(--text-color);
+        }
+
+        .context-menu ul li:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .context-menu ul hr {
+            border: none;
+            border-top: 1px solid #555;
+            margin: 5px 0;
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal {
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        .modal h3 {
+            margin-top: 0;
+        }
+        
+        .modal .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        
+        .modal .modal-actions button {
+            width: auto;
+            margin-left: 10px;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Control Panel -->
+        <div class="controls-panel">
+            <h2>Graph Editor</h2>
+
+            <div id="graph-data-group" class="control-group">
+                <h3>✏️ Graph Data</h3>
+                <textarea id="graph-input" placeholder="node_one&#10;node_two&#10;node_one node_two My Label"></textarea>
+                <button id="render-button">Sync from Text</button>
+            </div>
+
+            <div id="search-nav-group" class="control-group">
+                <h3>🔍 Search & Navigation</h3>
+                <input type="text" id="search-input" placeholder="Search nodes...">
+                <button id="reset-view-btn" class="secondary">Reset View</button>
+            </div>
+
+            <div id="global-settings-group" class="control-group">
+                <h3>🎨 Global Settings</h3>
+                 <div class="toggle-switch">
+                    <span>Physics Active</span>
+                    <input type="checkbox" id="force-layout-toggle" checked>
+                </div>
+                <div class="toggle-switch">
+                    <span>Show Arrows</span>
+                    <input type="checkbox" id="directed-toggle" checked>
+                </div>
+                
+                <label for="node-size-slider">Global Font Size: <span id="node-size-value">15</span></label>
+                <input type="range" id="node-size-slider" min="5" max="50" value="15">
+
+                <label for="edge-width-slider">Global Edge Width: <span id="edge-width-value">2</span></label>
+                <input type="range" id="edge-width-slider" min="1" max="15" value="2">
+                
+                <label for="arrow-size-slider">Arrowhead Size: <span id="arrow-size-value">8</span></label>
+                <input type="range" id="arrow-size-slider" min="2" max="30" value="8">
+
+                <label for="edge-length-slider">Ideal Edge Length: <span id="edge-length-value">150</span></label>
+                <input type="range" id="edge-length-slider" min="50" max="500" value="150">
+
+                <div class="color-setting">
+                    <label>Node Color</label>
+                    <div id="node-color-palette" class="color-palette"></div>
+                </div>
+                <div class="color-setting">
+                    <label>Edge Color</label>
+                    <div id="edge-color-palette" class="color-palette"></div>
+                </div>
+            </div>
+
+            <div id="file-ops-group" class="control-group">
+                <h3>💾 File</h3>
+                <div class="file-ops">
+                    <button id="save-btn">Save Graph</button>
+                    <button id="load-btn">Load Graph</button>
+                    <input type="file" id="file-input" accept=".json" style="display: none;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Canvas Area -->
+        <div class="canvas-container">
+            <canvas id="graphCanvas"></canvas>
+            <div class="status-bar">
+                <span id="status-nodes">Nodes: 0 (0 visible)</span>
+                <span id="status-edges">Edges: 0</span>
+                <span id="status-zoom">Zoom: 1.00x</span>
+                <span id="status-search">Search: -</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menus (hidden by default) -->
+    <div id="node-context-menu" class="context-menu">
+        <ul>
+            <li id="ctx-edit-node">✏️ Edit Node...</li>
+            <li id="ctx-hide-node">👁️ Hide Node</li>
+            <hr>
+            <li id="ctx-delete-node" style="color: var(--danger-color);">❌ Delete Node</li>
+        </ul>
+    </div>
+    <div id="edge-context-menu" class="context-menu">
+        <ul>
+            <li id="ctx-edit-edge">✏️ Edit Edge...</li>
+            <hr>
+            <li id="ctx-delete-edge" style="color: var(--danger-color);">❌ Delete Edge</li>
+        </ul>
+    </div>
+    <div id="canvas-context-menu" class="context-menu">
+        <ul>
+            <li id="ctx-add-node">➕ Add New Node</li>
+            <hr>
+            <li id="ctx-show-all">👁️ Show All Hidden Nodes</li>
+            <li id="ctx-reset-view">🔄 Reset View</li>
+        </ul>
+    </div>
+
+    <!-- Modals -->
+    <div id="edit-node-modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h3>Edit Node Properties</h3>
+            <input type="hidden" id="edit-node-id">
+            <label for="edit-node-label">Label (optional)</label>
+            <input type="text" id="edit-node-label" placeholder="Custom display text...">
+            <label for="edit-node-notes">Notes</label>
+            <textarea id="edit-node-notes" placeholder="Add personal study notes here..."></textarea>
+            <label for="edit-node-size">Size Multiplier</label>
+            <input type="number" id="edit-node-size" min="0.1" max="10" step="0.1">
+            <label>Node Color</label>
+            <div id="edit-node-color-palette" class="color-palette"></div>
+            <div class="modal-actions">
+                <button id="cancel-edit-btn" class="secondary">Cancel</button>
+                <button id="save-edit-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="edit-edge-modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h3>Edit Edge Properties</h3>
+            <label for="edit-edge-label">Label</label>
+            <input type="text" id="edit-edge-label" placeholder="Edge label text...">
+            <label for="edit-edge-width">Edge Width</label>
+            <input type="number" id="edit-edge-width" min="1" max="30" step="1">
+            <label>Edge Color</label>
+            <div id="edit-edge-color-palette" class="color-palette"></div>
+            <div class="modal-actions">
+                <button id="cancel-edit-edge-btn" class="secondary">Cancel</button>
+                <button id="save-edit-edge-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.querySelector('.canvas-container');
+        const inputArea = document.getElementById('graph-input');
+        const renderBtn = document.getElementById('render-button');
+        const forceToggle = document.getElementById('force-layout-toggle');
+        const directedToggle = document.getElementById('directed-toggle');
+        const nodeSizeSlider = document.getElementById('node-size-slider');
+        const edgeWidthSlider = document.getElementById('edge-width-slider');
+        const arrowSizeSlider = document.getElementById('arrow-size-slider');
+        const edgeLengthSlider = document.getElementById('edge-length-slider');
+        const searchInput = document.getElementById('search-input');
+        const resetViewBtn = document.getElementById('reset-view-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const loadBtn = document.getElementById('load-btn');
+        const fileInput = document.getElementById('file-input');
+
+        // --- State Variables ---
+        let nodes = [];
+        let edges = [];
+        let camera = { x: 0, y: 0, zoom: 1.0 };
+        let dragStart = { x: 0, y: 0 };
+        let isDraggingNode = null;
+        let isDraggingCanvas = false;
+        let isForceLayoutActive = true;
+        let searchQuery = '';
+        let searchResults = new Set();
+        let contextTarget = null;
+        let lastMousePos = { x: 0, y: 0 };
+        const physics = { repulsion: 8000, stiffness: 0.06, damping: 0.8, threshold: 0.1 };
+        let isDrawingEdge = false;
+        let edgeDrawStartNode = null;
+        
+        const nodeColors = ['#0B5345', '#641E16', '#154360', '#4A235A', '#784212', '#1B4F72', '#4D5656', '#512E5F'];
+        // Feature 2: New user-defined edge colors
+        const edgeColors = ['#FFFFFF', '#FFFF00', '#FA5B3D', '#FFAA1D', '#39FF14', '#0165FC', '#FF69B4', '#32CD32', '#FF00FF'];
+        let globalNodeColor = nodeColors[2];
+        let globalEdgeColor = edgeColors[5]; // Default to Bright Blue
+        let textSyncTimeout;
+
+
+        // --- Initial Setup ---
+        function initialize() {
+            resizeCanvas();
+            setupEventListeners();
+            setupColorPalettes();
+            resetView();
+            parseInputAndSyncGraph();
+            animate();
+        }
+
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = container.clientWidth * dpr;
+            canvas.height = container.clientHeight * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${container.clientWidth}px`;
+            canvas.style.height = `${container.clientHeight}px;`
+            if(nodes.length === 0) {
+                resetView();
+            }
+            draw();
+        }
+
+        // --- Data Management & Syncing ---
+        function parseInputAndSyncGraph(){const text=inputArea.value.trim();const lines=text.split('\n').filter(line=>line.trim()!=='');const seenNodeIds=new Set();const seenEdges=new Set();function getOrCreateNode(id){let node=nodes.find(n=>n.id===id);if(!node){const{x,y}=getNewNodePosition();node=createNode(id,{x,y});nodes.push(node)}return node}lines.forEach(line=>{const parts=line.trim().split(/\s+/);if(parts.length===0||parts[0]==='')return;const sourceId=parts[0];seenNodeIds.add(sourceId);const sourceNode=getOrCreateNode(sourceId);if(parts.length>1){const targetId=parts[1];seenNodeIds.add(targetId);const targetNode=getOrCreateNode(targetId);const label=parts.slice(2).join(' ');const edgeKey=`${sourceId}--->${targetId}`;seenEdges.add(edgeKey);let edge=edges.find(e=>e.source.id===sourceId&&e.target.id===targetId);if(edge){edge.label=label}else{edges.push({source:sourceNode,target:targetNode,label})}}});nodes=nodes.filter(node=>seenNodeIds.has(node.id));edges=edges.filter(e=>seenEdges.has(`${e.source.id}--->${e.target.id}`));updateAllNodeSizes();if(forceToggle.checked)isForceLayoutActive=true;draw()}
+        function updateTextboxFromGraph(){let text='';const standaloneNodes=new Set(nodes.map(n=>n.id));const edgeLines=edges.map(e=>{standaloneNodes.delete(e.source.id);standaloneNodes.delete(e.target.id);return`${e.source.id} ${e.target.id} ${e.label||''}`.trim()});const nodeLines=Array.from(standaloneNodes);text=[...nodeLines,...edgeLines].join('\n');inputArea.value=text}
+        function createNode(id,{x=0,y=0,label='',notes='',size=1,color=null,isHidden=false}){return{id,x,y,vx:0,vy:0,label:label||id,notes,sizeMultiplier:size,color,isHidden,get hasNotes(){return this.notes&&this.notes.trim()!==''}}}
+
+        // --- Drawing Engine ---
+        function draw() {
+            if (!ctx) return;
+            ctx.save();
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-color');
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.translate(camera.x, camera.y);
+            ctx.scale(camera.zoom, camera.zoom);
+
+            const visibleNodes = nodes.filter(n => !n.isHidden);
+            const visibleEdges = edges.filter(e => !e.source.isHidden && !e.target.isHidden);
+
+            drawEdges(visibleEdges);
+            if (isDrawingEdge && edgeDrawStartNode) {
+                drawEdgePreview();
+            }
+            drawNodes(visibleNodes);
+
+            ctx.restore();
+            updateStatusBar();
+        }
+        
+        function drawEdges(edgeList) {
+            const baseEdgeWidth = parseFloat(edgeWidthSlider.value);
+            const isDirected = directedToggle.checked;
+            const arrowSize = parseFloat(arrowSizeSlider.value);
+
+            edgeList.forEach(edge => {
+                const isHighlighted = searchResults.has(edge.source) || searchResults.has(edge.target);
+                ctx.strokeStyle = edge.color || (isHighlighted ? varToHex('--highlight-color') : globalEdgeColor);
+                ctx.lineWidth = (edge.width || baseEdgeWidth) * (isHighlighted ? 1.5 : 1);
+                
+                const sourceIntersect = getIntersectionPoint(edge.target, edge.source);
+                const targetIntersect = getIntersectionPoint(edge.source, edge.target);
+
+                if (!sourceIntersect || !targetIntersect) return;
+
+                const angle = Math.atan2(targetIntersect.y - sourceIntersect.y, targetIntersect.x - sourceIntersect.x);
+
+                // Feature 1: Pull back the line end point so it doesn't overlap the arrowhead
+                const lineEndX = targetIntersect.x - (arrowSize + ctx.lineWidth * 0.5) * Math.cos(angle);
+                const lineEndY = targetIntersect.y - (arrowSize + ctx.lineWidth * 0.5) * Math.sin(angle);
+
+                ctx.beginPath();
+                ctx.moveTo(Math.round(sourceIntersect.x), Math.round(sourceIntersect.y));
+                if (isDirected) {
+                    ctx.lineTo(Math.round(lineEndX), Math.round(lineEndY));
+                } else {
+                    ctx.lineTo(Math.round(targetIntersect.x), Math.round(targetIntersect.y));
+                }
+                ctx.stroke();
+
+                if (isDirected) {
+                    drawArrow(targetIntersect.x, targetIntersect.y, angle, ctx.lineWidth, ctx.strokeStyle);
+                }
+
+                if (edge.label) {
+                    drawEdgeLabel(edge, sourceIntersect, targetIntersect);
+                }
+            });
+        }
+        
+        function drawArrow(x, y, angle, lineWidth, color) {
+            const size = parseFloat(arrowSizeSlider.value) + lineWidth * 0.5;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0); // Tip of the arrow
+            ctx.lineTo(-size, -size / 2);
+            ctx.lineTo(-size, size / 2);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.restore();
+        }
+        
+        function drawEdgePreview(){ctx.strokeStyle='#85C1E9';ctx.lineWidth=3;ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(edgeDrawStartNode.x,edgeDrawStartNode.y);ctx.lineTo(lastMousePos.x,lastMousePos.y);ctx.stroke();ctx.setLineDash([])}
+        function drawEdgeLabel(edge,p1,p2){const midX=(p1.x+p2.x)/2;const midY=(p1.y+p2.y)/2;let angle=Math.atan2(p2.y-p1.y,p2.x-p1.x);if(angle<-Math.PI/2||angle>Math.PI/2){angle+=Math.PI}ctx.save();ctx.translate(midX,midY);ctx.rotate(angle);ctx.fillStyle=edge.color||globalEdgeColor;ctx.font=`${parseFloat(nodeSizeSlider.value)-2}px Arial`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(edge.label,0,-5);ctx.restore()}
+        function drawNodes(nodeList){const baseFontSize=parseFloat(nodeSizeSlider.value);nodeList.forEach(node=>{const isHighlighted=searchResults.has(node);const fontSize=baseFontSize*(node.sizeMultiplier||1);ctx.font=`${fontSize}px Arial`;const x=Math.round(node.x-node.width/2);const y=Math.round(node.y-node.height/2);const width=Math.round(node.width);const height=Math.round(node.height);ctx.beginPath();ctx.roundRect(x,y,width,height,10);ctx.fillStyle=node.color||globalNodeColor;ctx.fill();if(isHighlighted){ctx.strokeStyle=varToHex('--highlight-color');ctx.lineWidth=3;ctx.stroke()}ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(node.label,Math.round(node.x),Math.round(node.y));if(node.hasNotes){ctx.beginPath();ctx.arc(x+width-5,y+5,4,0,2*Math.PI);ctx.fillStyle=varToHex('--highlight-color');ctx.fill()}})}
+        function updateAllNodeSizes(){const baseFontSize=parseFloat(nodeSizeSlider.value);nodes.forEach(node=>{const fontSize=baseFontSize*(node.sizeMultiplier||1);ctx.font=`${fontSize}px Arial`;const textWidth=ctx.measureText(node.label).width;node.width=textWidth+20;node.height=fontSize+20})}
+        
+        // --- Physics & Animation (Unchanged) ---
+        function applyForceLayout(){if(!isForceLayoutActive)return;let totalEnergy=0;const idealEdgeLength=parseFloat(edgeLengthSlider.value);const visibleNodes=nodes.filter(n=>!n.isHidden);visibleNodes.forEach(nodeA=>{visibleNodes.forEach(nodeB=>{if(nodeA===nodeB)return;const dx=nodeA.x-nodeB.x;const dy=nodeA.y-nodeB.y;const distSq=dx*dx+dy*dy;if(distSq>0){const force=physics.repulsion/distSq;nodeA.vx+=(dx/Math.sqrt(distSq))*force;nodeA.vy+=(dy/Math.sqrt(distSq))*force}})});const visibleEdges=edges.filter(e=>!e.source.isHidden&&!e.target.isHidden);visibleEdges.forEach(edge=>{const dx=edge.target.x-edge.source.x;const dy=edge.target.y-edge.source.y;const dist=Math.hypot(dx,dy);if(dist>0){const force=physics.stiffness*(dist-idealEdgeLength);const fx=(dx/dist)*force/2;const fy=(dy/dist)*force/2;edge.source.vx+=fx;edge.source.vy+=fy;edge.target.vx-=fx;edge.target.vy-=fy}});visibleNodes.forEach(node=>{if(node===isDraggingNode)return;node.vx*=physics.damping;node.vy*=physics.damping;node.x+=node.vx;node.y+=node.vy;totalEnergy+=Math.abs(node.vx)+Math.abs(node.vy)});if(totalEnergy<physics.threshold*visibleNodes.length)isForceLayoutActive=false}
+        function animate(){if(forceToggle.checked&&isForceLayoutActive){applyForceLayout()}draw();requestAnimationFrame(animate)}
+
+        // --- Event Handlers (Unchanged) ---
+        function setupEventListeners(){window.addEventListener('resize',resizeCanvas);renderBtn.addEventListener('click',parseInputAndSyncGraph);inputArea.addEventListener('input',()=>{clearTimeout(textSyncTimeout);textSyncTimeout=setTimeout(parseInputAndSyncGraph,300)});forceToggle.addEventListener('change',()=>{if(forceToggle.checked)isForceLayoutActive=true});[nodeSizeSlider,edgeWidthSlider,arrowSizeSlider,directedToggle,edgeLengthSlider].forEach(el=>{el.addEventListener('input',()=>{updateSliderValue(el.id);if(el.id.includes('node-size'))updateAllNodeSizes();if(el.id.includes('edge-length'))isForceLayoutActive=true;draw()});updateSliderValue(el.id)});canvas.addEventListener('mousedown',onMouseDown);canvas.addEventListener('mousemove',onMouseMove);canvas.addEventListener('mouseup',onMouseUp);canvas.addEventListener('wheel',onWheel);canvas.addEventListener('contextmenu',onContextMenu);window.addEventListener('click',()=>hideAllContextMenus());searchInput.addEventListener('input',handleSearch);resetViewBtn.addEventListener('click',resetView);saveBtn.addEventListener('click',saveGraph);loadBtn.addEventListener('click',()=>fileInput.click());fileInput.addEventListener('change',loadGraph);document.getElementById('ctx-edit-node').addEventListener('click',()=>openEditModal(contextTarget));document.getElementById('ctx-delete-node').addEventListener('click',deleteNode);document.getElementById('ctx-hide-node').addEventListener('click',hideNode);document.getElementById('ctx-edit-edge').addEventListener('click',()=>openEditEdgeModal(contextTarget));document.getElementById('ctx-delete-edge').addEventListener('click',deleteEdge);document.getElementById('ctx-add-node').addEventListener('click',addNodeAtPosition);document.getElementById('ctx-show-all').addEventListener('click',showAllNodes);document.getElementById('ctx-reset-view').addEventListener('click',resetView);document.getElementById('save-edit-btn').addEventListener('click',saveNodeEdit);document.getElementById('cancel-edit-btn').addEventListener('click',closeEditModal);document.getElementById('save-edit-edge-btn').addEventListener('click',saveEdgeEdit);document.getElementById('cancel-edit-edge-btn').addEventListener('click',closeEditEdgeModal)}
+        function onMouseDown(e){hideAllContextMenus();const pos=getMousePos(e);const node=findNodeAtPos(pos);if(e.shiftKey&&node){isDrawingEdge=true;edgeDrawStartNode=node;canvas.style.cursor='crosshair';return}if(node){isDraggingNode=node;isForceLayoutActive=false;canvas.style.cursor='grabbing';return}isDraggingCanvas=true;dragStart={x:e.clientX,y:e.clientY,cameraX:camera.x,cameraY:camera.y}}
+        function onMouseMove(e){const pos=getMousePos(e);lastMousePos=pos;if(isDrawingEdge)return;if(isDraggingNode){isDraggingNode.x=pos.x;isDraggingNode.y=pos.y}else if(isDraggingCanvas){const dx=e.clientX-dragStart.x;const dy=e.clientY-dragStart.y;camera.x=dragStart.cameraX+dx;camera.y=dragStart.cameraY+dy}}
+        function onMouseUp(e){if(isDrawingEdge&&edgeDrawStartNode){const pos=getMousePos(e);const targetNode=findNodeAtPos(pos);if(targetNode&&targetNode!==edgeDrawStartNode){edges.push({source:edgeDrawStartNode,target:targetNode,label:''});updateTextboxFromGraph()}}isDrawingEdge=false;edgeDrawStartNode=null;if(isDraggingNode&&forceToggle.checked)isForceLayoutActive=true;isDraggingNode=null;isDraggingCanvas=false;canvas.style.cursor='grab'}
+        function onWheel(e){e.preventDefault();const zoomAmount=1.1;const oldZoom=camera.zoom;let newZoom;if(e.deltaY<0)newZoom=oldZoom*zoomAmount;else newZoom=oldZoom/zoomAmount;newZoom=Math.max(0.1,Math.min(newZoom,10));const mousePosScreen={x:e.clientX-canvas.offsetLeft,y:e.clientY-canvas.offsetTop};const mousePosWorld=getMousePos(e);camera.x=mousePosScreen.x-mousePosWorld.x*newZoom;camera.y=mousePosScreen.y-mousePosWorld.y*newZoom;camera.zoom=newZoom}
+        
+        // --- Context Menu, Modals, Features, File I/O (Unchanged, compacted) ---
+        function onContextMenu(e){e.preventDefault();hideAllContextMenus();const pos=getMousePos(e);lastMousePos=pos;contextTarget=findNodeAtPos(pos)||findEdgeAtPos(pos);let menu;if(contextTarget?.source){menu=document.getElementById('edge-context-menu')}else if(contextTarget){menu=document.getElementById('node-context-menu')}else{menu=document.getElementById('canvas-context-menu')}menu.style.display='block';menu.style.left=`${e.clientX}px`;menu.style.top=`${e.clientY}px`}
+        function hideAllContextMenus(){document.querySelectorAll('.context-menu').forEach(m=>m.style.display='none')}
+        function openEditModal(node){if(!node)return;document.getElementById('edit-node-modal-overlay').style.display='flex';document.getElementById('edit-node-id').value=node.id;document.getElementById('edit-node-label').value=node.label;document.getElementById('edit-node-notes').value=node.notes;document.getElementById('edit-node-size').value=node.sizeMultiplier||1;const palette=document.getElementById('edit-node-color-palette');const selectedColor=node.color||globalNodeColor;for(const swatch of palette.children){swatch.classList.toggle('selected',swatch.dataset.color===selectedColor)}}
+        function closeEditModal(){document.getElementById('edit-node-modal-overlay').style.display='none'}
+        function saveNodeEdit(){const id=document.getElementById('edit-node-id').value;const node=nodes.find(n=>n.id===id);if(node){node.label=document.getElementById('edit-node-label').value||node.id;node.notes=document.getElementById('edit-node-notes').value;node.sizeMultiplier=parseFloat(document.getElementById('edit-node-size').value);const selectedSwatch=document.querySelector('#edit-node-color-palette .selected');node.color=selectedSwatch?selectedSwatch.dataset.color:null;updateAllNodeSizes();updateTextboxFromGraph()}closeEditModal()}
+        function openEditEdgeModal(edge){if(!edge)return;contextTarget=edge;document.getElementById('edit-edge-modal-overlay').style.display='flex';document.getElementById('edit-edge-label').value=edge.label||'';document.getElementById('edit-edge-width').value=edge.width||edgeWidthSlider.value;const palette=document.getElementById('edit-edge-color-palette');const selectedColor=edge.color||globalEdgeColor;for(const swatch of palette.children){swatch.classList.toggle('selected',swatch.dataset.color===selectedColor)}}
+        function closeEditEdgeModal(){document.getElementById('edit-edge-modal-overlay').style.display='none'}
+        function saveEdgeEdit(){if(contextTarget&&contextTarget.source){contextTarget.label=document.getElementById('edit-edge-label').value;contextTarget.width=parseFloat(document.getElementById('edit-edge-width').value);const selectedSwatch=document.querySelector('#edit-edge-color-palette .selected');contextTarget.color=selectedSwatch?selectedSwatch.dataset.color:null;updateTextboxFromGraph()}closeEditEdgeModal()}
+        function handleSearch(e){searchQuery=e.target.value.toLowerCase();searchResults.clear();if(searchQuery){nodes.forEach(node=>{if(node.label.toLowerCase().includes(searchQuery)||node.id.toLowerCase().includes(searchQuery)){searchResults.add(node)}})}}
+        function resetView(){camera={x:container.clientWidth/2,y:container.clientHeight/2,zoom:1.0};searchInput.value='';searchQuery='';searchResults.clear()}
+        function addNodeAtPosition(){const id=prompt("Enter unique ID: ",`node_${nodes.length+1}`);if(id&&!nodes.some(n=>n.id===id)){const newNode=createNode(id,{x:lastMousePos.x,y:lastMousePos.y});nodes.push(newNode);updateAllNodeSizes();updateTextboxFromGraph()}else if(id){alert("ID already exists.")}}
+        function deleteNode(){if(!contextTarget||contextTarget.source)return;if(confirm(`Delete node "${contextTarget.label}"?`)){nodes=nodes.filter(n=>n.id!==contextTarget.id);edges=edges.filter(e=>e.source.id!==contextTarget.id&&e.target.id!==contextTarget.id);updateTextboxFromGraph()}}
+        function deleteEdge(){if(!contextTarget||!contextTarget.source)return;edges=edges.filter(e=>e!==contextTarget);updateTextboxFromGraph()}
+        function hideNode(){if(contextTarget&&!contextTarget.source){contextTarget.isHidden=true}}
+        function showAllNodes(){nodes.forEach(n=>n.isHidden=false)}
+        function saveGraph(){const dataToSave={nodes:nodes.map(n=>({id:n.id,x:n.x,y:n.y,label:n.label,notes:n.notes,sizeMultiplier:n.sizeMultiplier,color:n.color,isHidden:n.isHidden})),edges:edges.map(e=>({sourceId:e.source.id,targetId:e.target.id,label:e.label,width:e.width,color:e.color})),camera};const dataStr=JSON.stringify(dataToSave,null,2);const blob=new Blob([dataStr],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`graph-project-${Date.now()}.json`;a.click();URL.revokeObjectURL(url)}
+        function loadGraph(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(e){try{const data=JSON.parse(e.target.result);const newNodesMap=new Map();nodes=data.nodes.map(nodeData=>{const n=createNode(nodeData.id,{x:nodeData.x,y:nodeData.y,label:nodeData.label,notes:nodeData.notes,size:nodeData.sizeMultiplier,color:nodeData.color,isHidden:nodeData.isHidden});newNodesMap.set(n.id,n);return n});edges=data.edges.map(edgeData=>({source:newNodesMap.get(edgeData.sourceId),target:newNodesMap.get(edgeData.targetId),label:edgeData.label,width:edgeData.width,color:edgeData.color}));if(data.camera)camera=data.camera;updateAllNodeSizes();updateTextboxFromGraph();if(forceToggle.checked)isForceLayoutActive=true}catch(err){alert("Error loading file.");console.error(err)}};reader.readAsText(file);fileInput.value=''}
+
+        // --- Utility Functions ---
+        function getMousePos(evt){const rect=canvas.getBoundingClientRect();const screenX=evt.clientX-rect.left;const screenY=evt.clientY-rect.top;const worldX=(screenX-camera.x)/camera.zoom;const worldY=(screenY-camera.y)/camera.zoom;return{x:worldX,y:worldY}}
+        function findNodeAtPos(pos){for(let i=nodes.length-1;i>=0;i--){const node=nodes[i];if(!node.isHidden&&isPointInNode(pos,node))return node}return null}
+        function findEdgeAtPos(pos){const threshold=10/camera.zoom;return edges.find(edge=>{if(edge.source.isHidden||edge.target.isHidden)return false;return distanceToLine(pos,edge.source,edge.target)<threshold})}
+        function isPointInNode(pos,node){return pos.x>=node.x-node.width/2&&pos.x<=node.x+node.width/2&&pos.y>=node.y-node.height/2&&pos.y<=node.y+node.height/2}
+        function distanceToLine(p,v,w){const l2=(v.x-w.x)**2+(v.y-w.y)**2;if(l2==0)return Math.hypot(p.x-v.x,p.y-v.y);let t=((p.x-v.x)*(w.x-v.x)+(p.y-v.y)*(w.y-v.y))/l2;t=Math.max(0,Math.min(1,t));return Math.hypot(p.x-(v.x+t*(w.x-v.x)),p.y-(v.y+t*(w.y-v.y)))}
+        function getIntersectionPoint(sourcePoint,targetNode){const cx=targetNode.x,cy=targetNode.y;const w=targetNode.width/2+5,h=targetNode.height/2+5;const dx=sourcePoint.x-cx,dy=sourcePoint.y-cy;if(dx===0&&dy===0)return{x:cx,y:cy};const angle=Math.atan2(dy,dx);const tanAngle=Math.tan(angle);if(Math.abs(h*dx)>Math.abs(w*dy)){return{x:cx+Math.sign(dx)*w,y:cy+Math.sign(dx)*w*tanAngle}}else{return{x:cx+Math.sign(dy)*h/tanAngle,y:cy+Math.sign(dy)*h}}}
+        function updateSliderValue(sliderId){const slider=document.getElementById(sliderId);if(!slider)return;const output=document.getElementById(sliderId.replace('slider','value'));if(output)output.textContent=slider.value}
+        function updateStatusBar(){const visibleNodes=nodes.filter(n=>!n.isHidden);document.getElementById('status-nodes').textContent=`Nodes: ${nodes.length} (${visibleNodes.length} visible)`;document.getElementById('status-edges').textContent=`Edges: ${edges.length}`;document.getElementById('status-zoom').textContent=`Zoom: ${camera.zoom.toFixed(2)}x`;document.getElementById('status-search').textContent=`Search: ${searchQuery||'-'}`}
+        function getNewNodePosition(){const worldPos=getMousePos({clientX:container.clientWidth/2+canvas.offsetLeft,clientY:container.clientHeight/2+canvas.offsetTop});return{x:worldPos.x+(Math.random()-.5)*50,y:worldPos.y+(Math.random()-.5)*50}}
+        function varToHex(varName){return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()}
+        function createColorPalette(containerId,colors,onSelect,defaultColor){const container=document.getElementById(containerId);container.innerHTML='';colors.forEach(color=>{const swatch=document.createElement('div');swatch.className='color-swatch';swatch.style.backgroundColor=color;swatch.dataset.color=color;if(color===defaultColor){swatch.classList.add('selected')}swatch.addEventListener('click',()=>{const siblings=swatch.parentElement.children;for(const s of siblings){s.classList.remove('selected')}swatch.classList.add('selected');onSelect(color)});container.appendChild(swatch)})}
+        function setupColorPalettes(){createColorPalette('node-color-palette',nodeColors,c=>{globalNodeColor=c},globalNodeColor);createColorPalette('edge-color-palette',edgeColors,c=>{globalEdgeColor=c},globalEdgeColor);createColorPalette('edit-node-color-palette',nodeColors,()=>{},globalNodeColor);createColorPalette('edit-edge-color-palette',edgeColors,()=>{},globalEdgeColor)}
+
+        // --- Start the Application ---
+        initialize();
+    </script>
+</body>
+</html>
