@@ -3,20 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-  body { margin: 0; padding: 0; }
-  * { box-sizing: border-box; }
-  img { max-width: 100%; height: auto; }
-  @media (max-width: 768px) {
-    body { font-size: 14px; }
-  }
-</style>
     <title>Enhanced Graph Editor</title>
     <style>
-        @media (max-width: 768px) {
-  body { font-size: 14px; }
-  .container { width: 100%; }
-}
         :root {
             --bg-color: #1a1a1a;
             --panel-bg: #2a2a2a;
@@ -27,6 +15,7 @@
             --button-hover: #5a9ee2;
             --danger-color: #e24a4a;
             --highlight-color: #FFAA1D; /* Gold */
+            --selection-color: #39FF14; /* Bright Green */
         }
 
         body, html {
@@ -93,7 +82,7 @@
         }
 
         textarea {
-            height: 250px;
+            height: 350px;
             font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
             resize: vertical;
@@ -170,6 +159,12 @@
         button.secondary:hover {
             background-color: #666;
         }
+
+        button:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
         
         .file-ops button {
             display: inline-block;
@@ -211,7 +206,7 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             z-index: 1000;
             display: none;
-            min-width: 180px;
+            min-width: 220px;
         }
 
         .context-menu ul {
@@ -226,7 +221,12 @@
             color: var(--text-color);
         }
 
-        .context-menu ul li:hover {
+        .context-menu ul li.disabled {
+            color: #777;
+            cursor: not-allowed;
+        }
+
+        .context-menu ul li:not(.disabled):hover {
             background-color: var(--primary-color);
             color: white;
         }
@@ -278,7 +278,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Left Control Panel -->
         <div class="controls-panel">
             <h2>Graph Editor</h2>
 
@@ -337,19 +336,18 @@
             </div>
         </div>
 
-        <!-- Main Canvas Area -->
         <div class="canvas-container">
             <canvas id="graphCanvas"></canvas>
             <div class="status-bar">
-                <span id="status-nodes">Nodes: 0 (0 visible)</span>
+                <span id="status-nodes">Nodes: 0</span>
                 <span id="status-edges">Edges: 0</span>
+                <span id="status-selection">Selected: 0 nodes, 0 edges</span>
                 <span id="status-zoom">Zoom: 1.00x</span>
                 <span id="status-search">Search: -</span>
             </div>
         </div>
     </div>
 
-    <!-- Context Menus (hidden by default) -->
     <div id="node-context-menu" class="context-menu">
         <ul>
             <li id="ctx-edit-node">✏️ Edit Node...</li>
@@ -368,13 +366,14 @@
     <div id="canvas-context-menu" class="context-menu">
         <ul>
             <li id="ctx-add-node">➕ Add New Node</li>
+            <li id="ctx-batch-edit-nodes">✏️ Edit Selected Nodes (<span id="ctx-batch-node-count">0</span>)</li>
+            <li id="ctx-batch-edit-edges">✏️ Edit Selected Edges (<span id="ctx-batch-edge-count">0</span>)</li>
             <hr>
             <li id="ctx-show-all">👁️ Show All Hidden Nodes</li>
             <li id="ctx-reset-view">🔄 Reset View</li>
         </ul>
     </div>
 
-    <!-- Modals -->
     <div id="edit-node-modal-overlay" class="modal-overlay">
         <div class="modal">
             <h3>Edit Node Properties</h3>
@@ -399,6 +398,8 @@
             <h3>Edit Edge Properties</h3>
             <label for="edit-edge-label">Label</label>
             <input type="text" id="edit-edge-label" placeholder="Edge label text...">
+            <label for="edit-edge-length">Ideal Length</label>
+            <input type="number" id="edit-edge-length" min="10" max="1000" step="10">
             <label for="edit-edge-width">Edge Width</label>
             <input type="number" id="edit-edge-width" min="1" max="30" step="1">
             <label>Edge Color</label>
@@ -406,6 +407,36 @@
             <div class="modal-actions">
                 <button id="cancel-edit-edge-btn" class="secondary">Cancel</button>
                 <button id="save-edit-edge-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batch-edit-node-modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h3>Edit Properties for <span id="batch-edit-node-count"></span> Nodes</h3>
+            <label for="batch-edit-node-size">Size Multiplier</label>
+            <input type="number" id="batch-edit-node-size" min="0.1" max="10" step="0.1" value="1">
+            <label>Node Color</label>
+            <div id="batch-edit-node-color-palette" class="color-palette"></div>
+            <div class="modal-actions">
+                <button id="cancel-batch-edit-btn" class="secondary">Cancel</button>
+                <button id="save-batch-edit-btn">Apply to All</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batch-edit-edge-modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h3>Edit Properties for <span id="batch-edit-edge-count"></span> Edges</h3>
+            <label for="batch-edit-edge-length">Ideal Length</label>
+            <input type="number" id="batch-edit-edge-length" min="10" max="1000" step="10">
+            <label for="batch-edit-edge-width">Edge Width</label>
+            <input type="number" id="batch-edit-edge-width" min="1" max="30" step="1">
+            <label>Edge Color</label>
+            <div id="batch-edit-edge-color-palette" class="color-palette"></div>
+            <div class="modal-actions">
+                <button id="cancel-batch-edit-edge-btn" class="secondary">Cancel</button>
+                <button id="save-batch-edit-edge-btn">Apply to All</button>
             </div>
         </div>
     </div>
@@ -440,17 +471,18 @@
         let isForceLayoutActive = true;
         let searchQuery = '';
         let searchResults = new Set();
+        let selectedNodes = new Set();
+        let selectedEdges = new Set(); // FEATURE 1: For multi-edge selection
         let contextTarget = null;
         let lastMousePos = { x: 0, y: 0 };
         const physics = { repulsion: 8000, stiffness: 0.06, damping: 0.8, threshold: 0.1 };
         let isDrawingEdge = false;
         let edgeDrawStartNode = null;
         
-        const nodeColors = ['#0B5345', '#641E16', '#154360', '#4A235A', '#784212', '#1B4F72', '#4D5656', '#512E5F'];
-        // Feature 2: New user-defined edge colors
-        const edgeColors = ['#FFFFFF', '#FFFF00', '#FA5B3D', '#FFAA1D', '#39FF14', '#0165FC', '#FF69B4', '#32CD32', '#FF00FF'];
+        const nodeColors = ['#0B5345', '#641E16', '#154360', '#4A235A', '#784212'];
+        const edgeColors = ['#FFFFFF', '#FFFF00', '#39FF14', '#0165FC',  '#FF00FF'];
         let globalNodeColor = nodeColors[2];
-        let globalEdgeColor = edgeColors[5]; // Default to Bright Blue
+        let globalEdgeColor = edgeColors[0];
         let textSyncTimeout;
 
 
@@ -512,17 +544,19 @@
 
             edgeList.forEach(edge => {
                 const isHighlighted = searchResults.has(edge.source) || searchResults.has(edge.target);
-                ctx.strokeStyle = edge.color || (isHighlighted ? varToHex('--highlight-color') : globalEdgeColor);
-                ctx.lineWidth = (edge.width || baseEdgeWidth) * (isHighlighted ? 1.5 : 1);
+                const isSelected = selectedEdges.has(edge); // FEATURE 1: Check if edge is selected
                 
+                // Set style based on state
+                ctx.strokeStyle = isSelected ? varToHex('--selection-color') : (edge.color || (isHighlighted ? varToHex('--highlight-color') : globalEdgeColor));
+                ctx.lineWidth = (edge.width || baseEdgeWidth) * (isHighlighted ? 1.5 : 1) * (isSelected ? 1.8 : 1);
+
                 const sourceIntersect = getIntersectionPoint(edge.target, edge.source);
                 const targetIntersect = getIntersectionPoint(edge.source, edge.target);
 
                 if (!sourceIntersect || !targetIntersect) return;
 
                 const angle = Math.atan2(targetIntersect.y - sourceIntersect.y, targetIntersect.x - sourceIntersect.x);
-
-                // Feature 1: Pull back the line end point so it doesn't overlap the arrowhead
+                
                 const lineEndX = targetIntersect.x - (arrowSize + ctx.lineWidth * 0.5) * Math.cos(angle);
                 const lineEndY = targetIntersect.y - (arrowSize + ctx.lineWidth * 0.5) * Math.sin(angle);
 
@@ -551,7 +585,7 @@
             ctx.translate(x, y);
             ctx.rotate(angle);
             ctx.beginPath();
-            ctx.moveTo(0, 0); // Tip of the arrow
+            ctx.moveTo(0, 0);
             ctx.lineTo(-size, -size / 2);
             ctx.lineTo(-size, size / 2);
             ctx.closePath();
@@ -561,39 +595,195 @@
         }
         
         function drawEdgePreview(){ctx.strokeStyle='#85C1E9';ctx.lineWidth=3;ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(edgeDrawStartNode.x,edgeDrawStartNode.y);ctx.lineTo(lastMousePos.x,lastMousePos.y);ctx.stroke();ctx.setLineDash([])}
-        function drawEdgeLabel(edge,p1,p2){const midX=(p1.x+p2.x)/2;const midY=(p1.y+p2.y)/2;let angle=Math.atan2(p2.y-p1.y,p2.x-p1.x);if(angle<-Math.PI/2||angle>Math.PI/2){angle+=Math.PI}ctx.save();ctx.translate(midX,midY);ctx.rotate(angle);ctx.fillStyle=edge.color||globalEdgeColor;ctx.font=`${parseFloat(nodeSizeSlider.value)-2}px Arial`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(edge.label,0,-5);ctx.restore()}
-        function drawNodes(nodeList){const baseFontSize=parseFloat(nodeSizeSlider.value);nodeList.forEach(node=>{const isHighlighted=searchResults.has(node);const fontSize=baseFontSize*(node.sizeMultiplier||1);ctx.font=`${fontSize}px Arial`;const x=Math.round(node.x-node.width/2);const y=Math.round(node.y-node.height/2);const width=Math.round(node.width);const height=Math.round(node.height);ctx.beginPath();ctx.roundRect(x,y,width,height,10);ctx.fillStyle=node.color||globalNodeColor;ctx.fill();if(isHighlighted){ctx.strokeStyle=varToHex('--highlight-color');ctx.lineWidth=3;ctx.stroke()}ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(node.label,Math.round(node.x),Math.round(node.y));if(node.hasNotes){ctx.beginPath();ctx.arc(x+width-5,y+5,4,0,2*Math.PI);ctx.fillStyle=varToHex('--highlight-color');ctx.fill()}})}
+        function drawEdgeLabel(edge,p1,p2){const midX=(p1.x+p2.x)/2;const midY=(p1.y+p2.y)/2;let angle=Math.atan2(p2.y-p1.y,p2.x-p1.x);if(angle<-Math.PI/2||angle>Math.PI/2){angle+=Math.PI}ctx.save();ctx.translate(midX,midY);ctx.rotate(angle);const isSelected=selectedEdges.has(edge);ctx.fillStyle=isSelected?varToHex('--selection-color'):(edge.color||globalEdgeColor);ctx.font=`${parseFloat(nodeSizeSlider.value)-2}px Arial`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(edge.label,0,-5);ctx.restore()}
+        
+        function drawNodes(nodeList) {
+            const baseFontSize = parseFloat(nodeSizeSlider.value);
+            nodeList.forEach(node => {
+                const isHighlighted = searchResults.has(node);
+                const isSelected = selectedNodes.has(node);
+                const fontSize = baseFontSize * (node.sizeMultiplier || 1);
+                ctx.font = `${fontSize}px Arial`;
+                const x = Math.round(node.x - node.width / 2);
+                const y = Math.round(node.y - node.height / 2);
+                const width = Math.round(node.width);
+                const height = Math.round(node.height);
+
+                ctx.beginPath();
+                ctx.roundRect(x, y, width, height, 10);
+                ctx.fillStyle = node.color || globalNodeColor;
+                ctx.fill();
+
+                if (isSelected) {
+                    ctx.strokeStyle = varToHex('--selection-color');
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                } else if (isHighlighted) {
+                    ctx.strokeStyle = varToHex('--highlight-color');
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.label, Math.round(node.x), Math.round(node.y));
+
+                if (node.hasNotes) {
+                    ctx.beginPath();
+                    ctx.arc(x + width - 5, y + 5, 4, 0, 2 * Math.PI);
+                    ctx.fillStyle = varToHex('--highlight-color');
+                    ctx.fill();
+                }
+            });
+        }
         function updateAllNodeSizes(){const baseFontSize=parseFloat(nodeSizeSlider.value);nodes.forEach(node=>{const fontSize=baseFontSize*(node.sizeMultiplier||1);ctx.font=`${fontSize}px Arial`;const textWidth=ctx.measureText(node.label).width;node.width=textWidth+20;node.height=fontSize+20})}
         
-        // --- Physics & Animation (Unchanged) ---
-        function applyForceLayout(){if(!isForceLayoutActive)return;let totalEnergy=0;const idealEdgeLength=parseFloat(edgeLengthSlider.value);const visibleNodes=nodes.filter(n=>!n.isHidden);visibleNodes.forEach(nodeA=>{visibleNodes.forEach(nodeB=>{if(nodeA===nodeB)return;const dx=nodeA.x-nodeB.x;const dy=nodeA.y-nodeB.y;const distSq=dx*dx+dy*dy;if(distSq>0){const force=physics.repulsion/distSq;nodeA.vx+=(dx/Math.sqrt(distSq))*force;nodeA.vy+=(dy/Math.sqrt(distSq))*force}})});const visibleEdges=edges.filter(e=>!e.source.isHidden&&!e.target.isHidden);visibleEdges.forEach(edge=>{const dx=edge.target.x-edge.source.x;const dy=edge.target.y-edge.source.y;const dist=Math.hypot(dx,dy);if(dist>0){const force=physics.stiffness*(dist-idealEdgeLength);const fx=(dx/dist)*force/2;const fy=(dy/dist)*force/2;edge.source.vx+=fx;edge.source.vy+=fy;edge.target.vx-=fx;edge.target.vy-=fy}});visibleNodes.forEach(node=>{if(node===isDraggingNode)return;node.vx*=physics.damping;node.vy*=physics.damping;node.x+=node.vx;node.y+=node.vy;totalEnergy+=Math.abs(node.vx)+Math.abs(node.vy)});if(totalEnergy<physics.threshold*visibleNodes.length)isForceLayoutActive=false}
+        // --- Physics & Animation ---
+        function applyForceLayout() {
+            if (!isForceLayoutActive) return;
+            let totalEnergy = 0;
+            const globalIdealEdgeLength = parseFloat(edgeLengthSlider.value);
+            const visibleNodes = nodes.filter(n => !n.isHidden);
+            const centerForceStrength = 0.001; 
+
+            visibleNodes.forEach(nodeA => {
+                visibleNodes.forEach(nodeB => {
+                    if (nodeA === nodeB) return;
+                    const dx = nodeA.x - nodeB.x;
+                    const dy = nodeA.y - nodeB.y;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq > 0) {
+                        const force = physics.repulsion / distSq;
+                        nodeA.vx += (dx / Math.sqrt(distSq)) * force;
+                        nodeA.vy += (dy / Math.sqrt(distSq)) * force;
+                    }
+                });
+            });
+
+            const visibleEdges = edges.filter(e => !e.source.isHidden && !e.target.isHidden);
+            visibleEdges.forEach(edge => {
+                const idealEdgeLength = edge.length || globalIdealEdgeLength;
+                const dx = edge.target.x - edge.source.x;
+                const dy = edge.target.y - edge.source.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 0) {
+                    const force = physics.stiffness * (dist - idealEdgeLength);
+                    const fx = (dx / dist) * force / 2;
+                    const fy = (dy / dist) * force / 2;
+                    edge.source.vx += fx;
+                    edge.source.vy += fy;
+                    edge.target.vx -= fx;
+                    edge.target.vy -= fy;
+                }
+            });
+
+            visibleNodes.forEach(node => {
+                if (node === isDraggingNode) return;
+                
+                node.vx -= node.x * centerForceStrength;
+                node.vy -= node.y * centerForceStrength;
+
+                node.vx *= physics.damping;
+                node.vy *= physics.damping;
+                node.x += node.vx;
+                node.y += node.vy;
+                totalEnergy += Math.abs(node.vx) + Math.abs(node.vy);
+            });
+
+            if (totalEnergy < physics.threshold * visibleNodes.length) {
+                isForceLayoutActive = false;
+            }
+        }
         function animate(){if(forceToggle.checked&&isForceLayoutActive){applyForceLayout()}draw();requestAnimationFrame(animate)}
 
-        // --- Event Handlers (Unchanged) ---
-        function setupEventListeners(){window.addEventListener('resize',resizeCanvas);renderBtn.addEventListener('click',parseInputAndSyncGraph);inputArea.addEventListener('input',()=>{clearTimeout(textSyncTimeout);textSyncTimeout=setTimeout(parseInputAndSyncGraph,300)});forceToggle.addEventListener('change',()=>{if(forceToggle.checked)isForceLayoutActive=true});[nodeSizeSlider,edgeWidthSlider,arrowSizeSlider,directedToggle,edgeLengthSlider].forEach(el=>{el.addEventListener('input',()=>{updateSliderValue(el.id);if(el.id.includes('node-size'))updateAllNodeSizes();if(el.id.includes('edge-length'))isForceLayoutActive=true;draw()});updateSliderValue(el.id)});canvas.addEventListener('mousedown',onMouseDown);canvas.addEventListener('mousemove',onMouseMove);canvas.addEventListener('mouseup',onMouseUp);canvas.addEventListener('wheel',onWheel);canvas.addEventListener('contextmenu',onContextMenu);window.addEventListener('click',()=>hideAllContextMenus());searchInput.addEventListener('input',handleSearch);resetViewBtn.addEventListener('click',resetView);saveBtn.addEventListener('click',saveGraph);loadBtn.addEventListener('click',()=>fileInput.click());fileInput.addEventListener('change',loadGraph);document.getElementById('ctx-edit-node').addEventListener('click',()=>openEditModal(contextTarget));document.getElementById('ctx-delete-node').addEventListener('click',deleteNode);document.getElementById('ctx-hide-node').addEventListener('click',hideNode);document.getElementById('ctx-edit-edge').addEventListener('click',()=>openEditEdgeModal(contextTarget));document.getElementById('ctx-delete-edge').addEventListener('click',deleteEdge);document.getElementById('ctx-add-node').addEventListener('click',addNodeAtPosition);document.getElementById('ctx-show-all').addEventListener('click',showAllNodes);document.getElementById('ctx-reset-view').addEventListener('click',resetView);document.getElementById('save-edit-btn').addEventListener('click',saveNodeEdit);document.getElementById('cancel-edit-btn').addEventListener('click',closeEditModal);document.getElementById('save-edit-edge-btn').addEventListener('click',saveEdgeEdit);document.getElementById('cancel-edit-edge-btn').addEventListener('click',closeEditEdgeModal)}
-        function onMouseDown(e){hideAllContextMenus();const pos=getMousePos(e);const node=findNodeAtPos(pos);if(e.shiftKey&&node){isDrawingEdge=true;edgeDrawStartNode=node;canvas.style.cursor='crosshair';return}if(node){isDraggingNode=node;isForceLayoutActive=false;canvas.style.cursor='grabbing';return}isDraggingCanvas=true;dragStart={x:e.clientX,y:e.clientY,cameraX:camera.x,cameraY:camera.y}}
+        // --- Event Handlers ---
+        function setupEventListeners(){window.addEventListener('resize',resizeCanvas);renderBtn.addEventListener('click',parseInputAndSyncGraph);inputArea.addEventListener('input',()=>{clearTimeout(textSyncTimeout);textSyncTimeout=setTimeout(parseInputAndSyncGraph,300)});forceToggle.addEventListener('change',()=>{if(forceToggle.checked)isForceLayoutActive=true});[nodeSizeSlider,edgeWidthSlider,arrowSizeSlider,directedToggle,edgeLengthSlider].forEach(el=>{el.addEventListener('input',()=>{updateSliderValue(el.id);if(el.id.includes('node-size'))updateAllNodeSizes();if(el.id.includes('edge-length'))isForceLayoutActive=true;draw()});updateSliderValue(el.id)});canvas.addEventListener('mousedown',onMouseDown);canvas.addEventListener('mousemove',onMouseMove);canvas.addEventListener('mouseup',onMouseUp);canvas.addEventListener('wheel',onWheel);canvas.addEventListener('contextmenu',onContextMenu);window.addEventListener('click',()=>hideAllContextMenus());searchInput.addEventListener('input',handleSearch);resetViewBtn.addEventListener('click',resetView);saveBtn.addEventListener('click',saveGraph);loadBtn.addEventListener('click',()=>fileInput.click());fileInput.addEventListener('change',loadGraph);document.getElementById('ctx-edit-node').addEventListener('click',()=>openEditModal(contextTarget));document.getElementById('ctx-delete-node').addEventListener('click',deleteNode);document.getElementById('ctx-hide-node').addEventListener('click',hideNode);document.getElementById('ctx-edit-edge').addEventListener('click',()=>openEditEdgeModal(contextTarget));document.getElementById('ctx-delete-edge').addEventListener('click',deleteEdge);document.getElementById('ctx-add-node').addEventListener('click',addNodeAtPosition);document.getElementById('ctx-show-all').addEventListener('click',showAllNodes);document.getElementById('ctx-reset-view').addEventListener('click',resetView);document.getElementById('save-edit-btn').addEventListener('click',saveNodeEdit);document.getElementById('cancel-edit-btn').addEventListener('click',closeEditModal);document.getElementById('save-edit-edge-btn').addEventListener('click',saveEdgeEdit);document.getElementById('cancel-edit-edge-btn').addEventListener('click',closeEditEdgeModal);document.getElementById('ctx-batch-edit-nodes').addEventListener('click',openBatchEditNodeModal);document.getElementById('save-batch-edit-btn').addEventListener('click',saveBatchEditNode);document.getElementById('cancel-batch-edit-btn').addEventListener('click',closeBatchEditNodeModal);document.getElementById('ctx-batch-edit-edges').addEventListener('click',openBatchEditEdgeModal);document.getElementById('save-batch-edit-edge-btn').addEventListener('click',saveBatchEditEdge);document.getElementById('cancel-batch-edit-edge-btn').addEventListener('click',closeBatchEditEdgeModal)}
+        
+        function onMouseDown(e) {
+            hideAllContextMenus();
+            const pos = getMousePos(e);
+
+            // FEATURE 1 & 2: Handle multi-selection for nodes and edges with Ctrl key
+            if (e.ctrlKey) {
+                const node = findNodeAtPos(pos);
+                if (node) {
+                    if (selectedNodes.has(node)) {
+                        selectedNodes.delete(node);
+                    } else {
+                        selectedNodes.add(node);
+                    }
+                    return; // Prevent other actions
+                }
+
+                const edge = findEdgeAtPos(pos);
+                if (edge) {
+                    if (selectedEdges.has(edge)) {
+                        selectedEdges.delete(edge);
+                    } else {
+                        selectedEdges.add(edge);
+                    }
+                    return; // Prevent other actions
+                }
+            }
+
+            // FEATURE 2 FIX: Only clear selections on a left-click (e.button === 0)
+            if (e.button === 0) {
+                const node = findNodeAtPos(pos);
+                if (node && !selectedNodes.has(node)) {
+                    selectedNodes.clear();
+                    selectedEdges.clear();
+                } else if (!node) {
+                    selectedNodes.clear();
+                    selectedEdges.clear();
+                }
+            }
+            
+            const node=findNodeAtPos(pos);
+            if (e.shiftKey && node) {
+                isDrawingEdge = true;
+                edgeDrawStartNode = node;
+                canvas.style.cursor = 'crosshair';
+                return;
+            }
+            if (node) {
+                isDraggingNode = node;
+                isForceLayoutActive = false;
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+            isDraggingCanvas = true;
+            dragStart = { x: e.clientX, y: e.clientY, cameraX: camera.x, cameraY: camera.y };
+        }
+
         function onMouseMove(e){const pos=getMousePos(e);lastMousePos=pos;if(isDrawingEdge)return;if(isDraggingNode){isDraggingNode.x=pos.x;isDraggingNode.y=pos.y}else if(isDraggingCanvas){const dx=e.clientX-dragStart.x;const dy=e.clientY-dragStart.y;camera.x=dragStart.cameraX+dx;camera.y=dragStart.cameraY+dy}}
-        function onMouseUp(e){if(isDrawingEdge&&edgeDrawStartNode){const pos=getMousePos(e);const targetNode=findNodeAtPos(pos);if(targetNode&&targetNode!==edgeDrawStartNode){edges.push({source:edgeDrawStartNode,target:targetNode,label:''});updateTextboxFromGraph()}}isDrawingEdge=false;edgeDrawStartNode=null;if(isDraggingNode&&forceToggle.checked)isForceLayoutActive=true;isDraggingNode=null;isDraggingCanvas=false;canvas.style.cursor='grab'}
+        function onMouseUp(e){if(isDrawingEdge&&edgeDrawStartNode){const pos=getMousePos(e);const targetNode=findNodeAtPos(pos);if(targetNode&&targetNode!==edgeDrawStartNode){const existingEdgeIndex=edges.findIndex(edge=>edge.source===edgeDrawStartNode&&edge.target===targetNode);if(existingEdgeIndex!==-1){edges.splice(existingEdgeIndex,1)}else{edges.push({source:edgeDrawStartNode,target:targetNode,label:''})}updateTextboxFromGraph()}}isDrawingEdge=false;edgeDrawStartNode=null;if(isDraggingNode&&forceToggle.checked)isForceLayoutActive=true;isDraggingNode=null;isDraggingCanvas=false;canvas.style.cursor='grab'}
         function onWheel(e){e.preventDefault();const zoomAmount=1.1;const oldZoom=camera.zoom;let newZoom;if(e.deltaY<0)newZoom=oldZoom*zoomAmount;else newZoom=oldZoom/zoomAmount;newZoom=Math.max(0.1,Math.min(newZoom,10));const mousePosScreen={x:e.clientX-canvas.offsetLeft,y:e.clientY-canvas.offsetTop};const mousePosWorld=getMousePos(e);camera.x=mousePosScreen.x-mousePosWorld.x*newZoom;camera.y=mousePosScreen.y-mousePosWorld.y*newZoom;camera.zoom=newZoom}
         
-        // --- Context Menu, Modals, Features, File I/O (Unchanged, compacted) ---
-        function onContextMenu(e){e.preventDefault();hideAllContextMenus();const pos=getMousePos(e);lastMousePos=pos;contextTarget=findNodeAtPos(pos)||findEdgeAtPos(pos);let menu;if(contextTarget?.source){menu=document.getElementById('edge-context-menu')}else if(contextTarget){menu=document.getElementById('node-context-menu')}else{menu=document.getElementById('canvas-context-menu')}menu.style.display='block';menu.style.left=`${e.clientX}px`;menu.style.top=`${e.clientY}px`}
+        // --- Context Menu, Modals, Features, File I/O ---
+        function onContextMenu(e){e.preventDefault();hideAllContextMenus();const pos=getMousePos(e);lastMousePos=pos;contextTarget=findNodeAtPos(pos)||findEdgeAtPos(pos);let menu;if(contextTarget?.source){menu=document.getElementById('edge-context-menu')}else if(contextTarget){menu=document.getElementById('node-context-menu')}else{menu=document.getElementById('canvas-context-menu');const batchNodeBtn=document.getElementById('ctx-batch-edit-nodes');const batchNodeCount=document.getElementById('ctx-batch-node-count');const batchEdgeBtn=document.getElementById('ctx-batch-edit-edges');const batchEdgeCount=document.getElementById('ctx-batch-edge-count');batchNodeCount.textContent=selectedNodes.size;batchEdgeCount.textContent=selectedEdges.size;selectedNodes.size>0?batchNodeBtn.classList.remove('disabled'):batchNodeBtn.classList.add('disabled');selectedEdges.size>0?batchEdgeBtn.classList.remove('disabled'):batchEdgeBtn.classList.add('disabled')}menu.style.display='block';menu.style.left=`${e.clientX}px`;menu.style.top=`${e.clientY}px`}
         function hideAllContextMenus(){document.querySelectorAll('.context-menu').forEach(m=>m.style.display='none')}
         function openEditModal(node){if(!node)return;document.getElementById('edit-node-modal-overlay').style.display='flex';document.getElementById('edit-node-id').value=node.id;document.getElementById('edit-node-label').value=node.label;document.getElementById('edit-node-notes').value=node.notes;document.getElementById('edit-node-size').value=node.sizeMultiplier||1;const palette=document.getElementById('edit-node-color-palette');const selectedColor=node.color||globalNodeColor;for(const swatch of palette.children){swatch.classList.toggle('selected',swatch.dataset.color===selectedColor)}}
         function closeEditModal(){document.getElementById('edit-node-modal-overlay').style.display='none'}
         function saveNodeEdit(){const id=document.getElementById('edit-node-id').value;const node=nodes.find(n=>n.id===id);if(node){node.label=document.getElementById('edit-node-label').value||node.id;node.notes=document.getElementById('edit-node-notes').value;node.sizeMultiplier=parseFloat(document.getElementById('edit-node-size').value);const selectedSwatch=document.querySelector('#edit-node-color-palette .selected');node.color=selectedSwatch?selectedSwatch.dataset.color:null;updateAllNodeSizes();updateTextboxFromGraph()}closeEditModal()}
-        function openEditEdgeModal(edge){if(!edge)return;contextTarget=edge;document.getElementById('edit-edge-modal-overlay').style.display='flex';document.getElementById('edit-edge-label').value=edge.label||'';document.getElementById('edit-edge-width').value=edge.width||edgeWidthSlider.value;const palette=document.getElementById('edit-edge-color-palette');const selectedColor=edge.color||globalEdgeColor;for(const swatch of palette.children){swatch.classList.toggle('selected',swatch.dataset.color===selectedColor)}}
+        function openEditEdgeModal(edge){if(!edge)return;contextTarget=edge;document.getElementById('edit-edge-modal-overlay').style.display='flex';document.getElementById('edit-edge-label').value=edge.label||'';document.getElementById('edit-edge-width').value=edge.width||edgeWidthSlider.value;document.getElementById('edit-edge-length').value=edge.length||edgeLengthSlider.value;const palette=document.getElementById('edit-edge-color-palette');const selectedColor=edge.color||globalEdgeColor;for(const swatch of palette.children){swatch.classList.toggle('selected',swatch.dataset.color===selectedColor)}}
         function closeEditEdgeModal(){document.getElementById('edit-edge-modal-overlay').style.display='none'}
-        function saveEdgeEdit(){if(contextTarget&&contextTarget.source){contextTarget.label=document.getElementById('edit-edge-label').value;contextTarget.width=parseFloat(document.getElementById('edit-edge-width').value);const selectedSwatch=document.querySelector('#edit-edge-color-palette .selected');contextTarget.color=selectedSwatch?selectedSwatch.dataset.color:null;updateTextboxFromGraph()}closeEditEdgeModal()}
+        function saveEdgeEdit(){if(contextTarget&&contextTarget.source){contextTarget.label=document.getElementById('edit-edge-label').value;contextTarget.width=parseFloat(document.getElementById('edit-edge-width').value);contextTarget.length=parseFloat(document.getElementById('edit-edge-length').value);const selectedSwatch=document.querySelector('#edit-edge-color-palette .selected');contextTarget.color=selectedSwatch?selectedSwatch.dataset.color:null;isForceLayoutActive=true;updateTextboxFromGraph()}closeEditEdgeModal()}
+        function openBatchEditNodeModal(){if(selectedNodes.size===0)return;document.getElementById('batch-edit-node-count').textContent=selectedNodes.size;document.getElementById('batch-edit-node-modal-overlay').style.display='flex'}
+        function closeBatchEditNodeModal(){document.getElementById('batch-edit-node-modal-overlay').style.display='none'}
+        function saveBatchEditNode(){const newSize=parseFloat(document.getElementById('batch-edit-node-size').value);const selectedSwatch=document.querySelector('#batch-edit-node-color-palette .selected');const newColor=selectedSwatch?selectedSwatch.dataset.color:null;selectedNodes.forEach(node=>{node.sizeMultiplier=newSize;node.color=newColor});updateAllNodeSizes();updateTextboxFromGraph();closeBatchEditNodeModal()}
+        function openBatchEditEdgeModal(){if(selectedEdges.size===0)return;document.getElementById('batch-edit-edge-count').textContent=selectedEdges.size;document.getElementById('batch-edit-edge-modal-overlay').style.display='flex'}
+        function closeBatchEditEdgeModal(){document.getElementById('batch-edit-edge-modal-overlay').style.display='none'}
+        function saveBatchEditEdge(){const newWidth=parseFloat(document.getElementById('batch-edit-edge-width').value);const newLength=parseFloat(document.getElementById('batch-edit-edge-length').value);const selectedSwatch=document.querySelector('#batch-edit-edge-color-palette .selected');const newColor=selectedSwatch?selectedSwatch.dataset.color:null;selectedEdges.forEach(edge=>{edge.width=newWidth;edge.length=newLength;edge.color=newColor});isForceLayoutActive=true;updateTextboxFromGraph();closeBatchEditEdgeModal()}
         function handleSearch(e){searchQuery=e.target.value.toLowerCase();searchResults.clear();if(searchQuery){nodes.forEach(node=>{if(node.label.toLowerCase().includes(searchQuery)||node.id.toLowerCase().includes(searchQuery)){searchResults.add(node)}})}}
-        function resetView(){camera={x:container.clientWidth/2,y:container.clientHeight/2,zoom:1.0};searchInput.value='';searchQuery='';searchResults.clear()}
+        function resetView(){camera={x:container.clientWidth/2,y:container.clientHeight/2,zoom:1.0};searchInput.value='';searchQuery='';searchResults.clear();selectedNodes.clear();selectedEdges.clear()}
         function addNodeAtPosition(){const id=prompt("Enter unique ID: ",`node_${nodes.length+1}`);if(id&&!nodes.some(n=>n.id===id)){const newNode=createNode(id,{x:lastMousePos.x,y:lastMousePos.y});nodes.push(newNode);updateAllNodeSizes();updateTextboxFromGraph()}else if(id){alert("ID already exists.")}}
         function deleteNode(){if(!contextTarget||contextTarget.source)return;if(confirm(`Delete node "${contextTarget.label}"?`)){nodes=nodes.filter(n=>n.id!==contextTarget.id);edges=edges.filter(e=>e.source.id!==contextTarget.id&&e.target.id!==contextTarget.id);updateTextboxFromGraph()}}
         function deleteEdge(){if(!contextTarget||!contextTarget.source)return;edges=edges.filter(e=>e!==contextTarget);updateTextboxFromGraph()}
         function hideNode(){if(contextTarget&&!contextTarget.source){contextTarget.isHidden=true}}
         function showAllNodes(){nodes.forEach(n=>n.isHidden=false)}
-        function saveGraph(){const dataToSave={nodes:nodes.map(n=>({id:n.id,x:n.x,y:n.y,label:n.label,notes:n.notes,sizeMultiplier:n.sizeMultiplier,color:n.color,isHidden:n.isHidden})),edges:edges.map(e=>({sourceId:e.source.id,targetId:e.target.id,label:e.label,width:e.width,color:e.color})),camera};const dataStr=JSON.stringify(dataToSave,null,2);const blob=new Blob([dataStr],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`graph-project-${Date.now()}.json`;a.click();URL.revokeObjectURL(url)}
-        function loadGraph(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(e){try{const data=JSON.parse(e.target.result);const newNodesMap=new Map();nodes=data.nodes.map(nodeData=>{const n=createNode(nodeData.id,{x:nodeData.x,y:nodeData.y,label:nodeData.label,notes:nodeData.notes,size:nodeData.sizeMultiplier,color:nodeData.color,isHidden:nodeData.isHidden});newNodesMap.set(n.id,n);return n});edges=data.edges.map(edgeData=>({source:newNodesMap.get(edgeData.sourceId),target:newNodesMap.get(edgeData.targetId),label:edgeData.label,width:edgeData.width,color:edgeData.color}));if(data.camera)camera=data.camera;updateAllNodeSizes();updateTextboxFromGraph();if(forceToggle.checked)isForceLayoutActive=true}catch(err){alert("Error loading file.");console.error(err)}};reader.readAsText(file);fileInput.value=''}
+        function saveGraph(){const dataToSave={nodes:nodes.map(n=>({id:n.id,x:n.x,y:n.y,label:n.label,notes:n.notes,sizeMultiplier:n.sizeMultiplier,color:n.color,isHidden:n.isHidden})),edges:edges.map(e=>({sourceId:e.source.id,targetId:e.target.id,label:e.label,width:e.width,color:e.color,length:e.length})),camera};const dataStr=JSON.stringify(dataToSave,null,2);const blob=new Blob([dataStr],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`graph-project-${Date.now()}.json`;a.click();URL.revokeObjectURL(url)}
+        function loadGraph(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(e){try{const data=JSON.parse(e.target.result);const newNodesMap=new Map();nodes=data.nodes.map(nodeData=>{const n=createNode(nodeData.id,{x:nodeData.x,y:nodeData.y,label:nodeData.label,notes:nodeData.notes,size:nodeData.sizeMultiplier,color:nodeData.color,isHidden:nodeData.isHidden});newNodesMap.set(n.id,n);return n});edges=data.edges.map(edgeData=>({source:newNodesMap.get(edgeData.sourceId),target:newNodesMap.get(edgeData.targetId),label:edgeData.label,width:edgeData.width,color:edgeData.color,length:edgeData.length}));if(data.camera)camera=data.camera;updateAllNodeSizes();updateTextboxFromGraph();if(forceToggle.checked)isForceLayoutActive=true}catch(err){alert("Error loading file.");console.error(err)}};reader.readAsText(file);fileInput.value=''}
 
         // --- Utility Functions ---
         function getMousePos(evt){const rect=canvas.getBoundingClientRect();const screenX=evt.clientX-rect.left;const screenY=evt.clientY-rect.top;const worldX=(screenX-camera.x)/camera.zoom;const worldY=(screenY-camera.y)/camera.zoom;return{x:worldX,y:worldY}}
@@ -603,11 +793,11 @@
         function distanceToLine(p,v,w){const l2=(v.x-w.x)**2+(v.y-w.y)**2;if(l2==0)return Math.hypot(p.x-v.x,p.y-v.y);let t=((p.x-v.x)*(w.x-v.x)+(p.y-v.y)*(w.y-v.y))/l2;t=Math.max(0,Math.min(1,t));return Math.hypot(p.x-(v.x+t*(w.x-v.x)),p.y-(v.y+t*(w.y-v.y)))}
         function getIntersectionPoint(sourcePoint,targetNode){const cx=targetNode.x,cy=targetNode.y;const w=targetNode.width/2+5,h=targetNode.height/2+5;const dx=sourcePoint.x-cx,dy=sourcePoint.y-cy;if(dx===0&&dy===0)return{x:cx,y:cy};const angle=Math.atan2(dy,dx);const tanAngle=Math.tan(angle);if(Math.abs(h*dx)>Math.abs(w*dy)){return{x:cx+Math.sign(dx)*w,y:cy+Math.sign(dx)*w*tanAngle}}else{return{x:cx+Math.sign(dy)*h/tanAngle,y:cy+Math.sign(dy)*h}}}
         function updateSliderValue(sliderId){const slider=document.getElementById(sliderId);if(!slider)return;const output=document.getElementById(sliderId.replace('slider','value'));if(output)output.textContent=slider.value}
-        function updateStatusBar(){const visibleNodes=nodes.filter(n=>!n.isHidden);document.getElementById('status-nodes').textContent=`Nodes: ${nodes.length} (${visibleNodes.length} visible)`;document.getElementById('status-edges').textContent=`Edges: ${edges.length}`;document.getElementById('status-zoom').textContent=`Zoom: ${camera.zoom.toFixed(2)}x`;document.getElementById('status-search').textContent=`Search: ${searchQuery||'-'}`}
+        function updateStatusBar(){const visibleNodes=nodes.filter(n=>!n.isHidden);document.getElementById('status-nodes').textContent=`Nodes: ${nodes.length} (${visibleNodes.length} visible)`;document.getElementById('status-edges').textContent=`Edges: ${edges.length}`;document.getElementById('status-selection').textContent=`Selected: ${selectedNodes.size} nodes, ${selectedEdges.size} edges`;document.getElementById('status-zoom').textContent=`Zoom: ${camera.zoom.toFixed(2)}x`;document.getElementById('status-search').textContent=`Search: ${searchQuery||'-'}`}
         function getNewNodePosition(){const worldPos=getMousePos({clientX:container.clientWidth/2+canvas.offsetLeft,clientY:container.clientHeight/2+canvas.offsetTop});return{x:worldPos.x+(Math.random()-.5)*50,y:worldPos.y+(Math.random()-.5)*50}}
         function varToHex(varName){return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()}
         function createColorPalette(containerId,colors,onSelect,defaultColor){const container=document.getElementById(containerId);container.innerHTML='';colors.forEach(color=>{const swatch=document.createElement('div');swatch.className='color-swatch';swatch.style.backgroundColor=color;swatch.dataset.color=color;if(color===defaultColor){swatch.classList.add('selected')}swatch.addEventListener('click',()=>{const siblings=swatch.parentElement.children;for(const s of siblings){s.classList.remove('selected')}swatch.classList.add('selected');onSelect(color)});container.appendChild(swatch)})}
-        function setupColorPalettes(){createColorPalette('node-color-palette',nodeColors,c=>{globalNodeColor=c},globalNodeColor);createColorPalette('edge-color-palette',edgeColors,c=>{globalEdgeColor=c},globalEdgeColor);createColorPalette('edit-node-color-palette',nodeColors,()=>{},globalNodeColor);createColorPalette('edit-edge-color-palette',edgeColors,()=>{},globalEdgeColor)}
+        function setupColorPalettes(){createColorPalette('node-color-palette',nodeColors,c=>{globalNodeColor=c},globalNodeColor);createColorPalette('edge-color-palette',edgeColors,c=>{globalEdgeColor=c},globalEdgeColor);createColorPalette('edit-node-color-palette',nodeColors,()=>{},globalNodeColor);createColorPalette('edit-edge-color-palette',edgeColors,()=>{},globalEdgeColor);createColorPalette('batch-edit-node-color-palette',nodeColors,()=>{},globalNodeColor);createColorPalette('batch-edit-edge-color-palette',edgeColors,()=>{},globalEdgeColor)}
 
         // --- Start the Application ---
         initialize();
